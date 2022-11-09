@@ -1,0 +1,120 @@
+#!/bin/bash
+
+PYTHON=python3.9
+# CHECK PYTHON 3
+if command -v $PYTHON &>/dev/null; then
+    echo Python3 available
+else
+    echo Python3 not available, please install it or add to the PATH variable
+    exit 1
+fi
+
+# CHECK PIP
+if command -v $PYTHON -m pip &>/dev/null; then
+    echo Pip available
+else
+    echo Pip not available, please install it or add to the PATH variable
+    exit 1
+fi
+
+# CHECK VIRTUALENV COMMAND
+if command -v $PYTHON -m venv &>/dev/null; then
+    echo Venv command available
+else
+    echo Venv not available, please install it [For example: python3 -m pip install python-venv]
+    exit 1
+fi
+
+COMMAND=$1
+PYTHON_VERSION=3.9
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+    --python-version)
+        PYTHON_VERSION="$2"
+        shift
+        shift
+        ;;
+    *)
+        COMMAND=$1
+        shift
+        break
+        ;;
+    esac
+    shift
+done
+# CHECK VENV NOT EXISTS
+if [ ! -d .venv ]; then
+
+    $PYTHON -m venv .venv
+    if [ ! -d .pip ]; then
+        mkdir .pip
+        curl https://bootstrap.pypa.io/get-pip.py -o .pip/get-pip.py
+    fi
+    .venv/bin/python3 .pip/get-pip.py
+    .venv/bin/pip3 install -r requirements.txt
+    .venv/bin/pip3 install -r requirements-tests.txt
+    .venv/bin/pip3 install -r requirements-dev.txt
+fi
+
+if [ -f '.env' ]; then
+    echo Use .env file to read sensitive information
+    while IPS='=' read -r key value; do
+        eval ${key}
+    done <'.env'
+else
+    # REGENERATE SENSITIVE INFO FROM TEMPLATE
+    cat >'.env' <<EOF
+WIKIBASE_URL=https://phytonium.qstand.art
+SPARQL_ENDPOINT=https://phytonium.qstand.art/sparql
+BOT_USERNAME=SYSDBA@django
+BOT_PASSWORD=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+PYTHONPATH=.
+EOF
+fi
+
+echo EXECUTE
+echo =========== $COMMAND
+echo $COMMAND ===========
+echo COMMAND
+
+if [ "x$COMMAND" == "xpublish" ]; then
+    echo 'Publish on the pypi.org'
+    #!/bin/bash
+    rm -fr build
+    rm -fr dist
+    .venv/bin/python3 setup.py bdist_wheel
+    .venv/bin/python3 setup.py sdist
+    .venv/bin/twine upload dist/*
+fi
+
+if [ "x$COMMAND" == "xmanage" ]; then
+    echo "Run manage.py script manage.py $@"
+    export DJANGO_SECRET_KEY=$(.venv/bin/python3 -c 'from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())')
+    export DJANGO_DEBUG=True
+    #./buildew manage loaddata app_moods/fixtures/geometry_shapes.yaml
+    .venv/bin/python3 manage.py $@
+fi
+
+if [ "x$COMMAND" == "xredeps" ]; then
+    echo "Reinstall dependencies"
+    .venv/bin/pip3 install -r requirements.txt
+    .venv/bin/pip3 install -r requirements-tests.txt
+    .venv/bin/pip3 install -r requirements-dev.txt
+fi
+
+if [ "x$COMMAND" == "xclean" ]; then
+    echo "Clean python cache folders"
+    find . -name __pycache__ | xargs rm -fr
+fi
+
+if [ "x$COMMAND" == "xrun-demo" ]; then
+    echo 'Run sample site'
+    CURRENT_FOLDER=$PWD
+    cd catsite
+    ../.venv/bin/python manage.py runserver
+    cd $CURRENT_FOLDER
+fi
+
+AVAILABLE_COMMANDS="run-demo publish manage redeps clean"
+echo ''
+[[ $AVAILABLE_COMMANDS =~ (^| )$COMMAND($| ) ]] && echo 'Ok' || echo 'Unknown command: ' "$COMMAND" && echo 'Available commands are: ' "$AVAILABLE_COMMANDS"

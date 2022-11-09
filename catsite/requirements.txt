@@ -1,0 +1,7 @@
+djangorestframework==3.12.4
+django-wikibase==0.1.1a5
+Pillow==9.0.1
+# TODO: remove below dependency
+six==1.16.0
+#88012460
+django-analytical==3.1.0
